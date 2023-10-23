@@ -1,0 +1,6 @@
+name: medaka_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - medaka=1.10.0

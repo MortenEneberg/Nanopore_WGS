@@ -1,182 +1,145 @@
-import glob
-import re
+import string
 import sys
-from os.path import join 
+import pathlib
+import os
+import subprocess
+import gzip
+import pwd
+import datetime
+import re  # You were missing the import for the 're' module
 
-#### Please edit your config file and keep it in the same directory as this script when you execute it
+def getCurrentTime():
+    return datetime.datetime.now().strftime("%Y_%b_%d_%H:%M")
 
-#### Commande exemple:
-### TODO
+def getCurrentDate():
+    return datetime.datetime.now().strftime("%y%m%d")
 
-datadir=config["reads"]
-minLength=config["minReadsLength"]
-minQual=config["minReadQual"]
-threadsflye=config["threadsFlye"]
+def GetFilename(FullPath):
+    return os.path.splitext(os.path.basename(FullPath))[0]
 
+def FixDirectoryName(Dir):
+    x = re.search('/$', Dir)
+    if x is not None:
+        return Dir
+    else:
+        return Dir + "/"
 
-################################################################################
+def unique(list1):
+    unique_list = []
+    for x in list1:
+        if x not in unique_list:
+            unique_list.append(x)
+    return unique_list
 
-##### Get sample lists with wildcards
+def generate_barcodes():
+    barcodes = ["barcode" + str(i) for i in range(1, 97)]
+    return barcodes
 
-SAMPLES, = glob_wildcards(datadir+"/{sample}"+ext)
+def list_directories(folder_path):
+    directories = [d for d in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, d))]
+    return directories
 
-##### Define helper functions for standard output during execution
-def message(mes):
-	sys.stderr.write("|---- " + mes + "\n")
-
-def errormes(mes):
-	sys.stderr.write("| ERROR ----" + mes + "\n")
-
-####### Print info about samples:
-
-NBSAMPLES = len(SAMPLES)
-message(str(NBSAMPLES)+" samples  will be analysed:")
-for i in SAMPLES:
-	message(str(i))
-
+READ_FOLDER = config["reads"]
+LIBRARIES = list_directories(READ_FOLDER)
+BARCODES = generate_barcodes()
+minQual = config["minReadsQual"]
+minLength = config["minReadsLength"]
  
 ##### Define Rules !
 
-rule All:
+rule all:
 	input:
-		expand(outputdir+"/{smp}/FilteredReads/Filt_{smp}.fastq",smp=SAMPLES),
-		expand(outputdir+"/{smp}/FlyeAssemblies/Flye_{smp}.fasta",smp=SAMPLES),
-		expand(outputdir+"/{smp}/PolishedAssemblies/{smp}.fasta",smp=SAMPLES),
-		expand(outputdir+"/{smp}/ResistanceAbricate/{smp}_abricate.txt",smp=SAMPLES),
-		expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt",smp=SAMPLES),
-		expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco_parsed.txt",smp=SAMPLES),
-		expand(outputdir+"/{smp}/Mob_recon/contig_report.txt",smp=SAMPLES),
-		expand(outputdir+"/{smp}/Prokka/{smp}.gff",smp=SAMPLES),
-		outputdir+"/roary/core_gene_alignment.aln",
-		outputdir+"/FastTree/tree.newick"
+		expand("data/30_polished_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta",seq_lib=LIBRARIES, barcode=BARCODES),
+		expand("data/qc/01_NanoPlot_raw/{seq_lib}/{barcode}/{seq_lib}_{barcode}.html",seq_lib=LIBRARIES, barcode=BARCODES),
+		#expand("/{smp}/ResistanceAbricate/{smp}_abricate.txt",smp=SAMPLES),
+		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt",smp=SAMPLES),
+		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco_parsed.txt",smp=SAMPLES),
+		#expand(outputdir+"/{smp}/Mob_recon/contig_report.txt",smp=SAMPLES),
+		#expand(outputdir+"/{smp}/Prokka/{smp}.gff",smp=SAMPLES),
+		#outputdir+"/roary/core_gene_alignment.aln",
+		#outputdir+"/FastTree/tree.newick"
 
-rule Filter:
-	input:
-		datadir+"/{smp}"+ext
+rule cat_raw_reads:
+    output:
+        fastq = "data/01_cat_reads/{seq_lib}/{barcode}.fastq"
+    params:
+        reads = READ_FOLDER
+    shell:
+        """
+        cat {params.reads}{wildcards.seq_lib}/{wildcards.barcode}*.fastq.gz | gunzip -c > {output.fastq}
+        """
+
+rule Nanoplot_raw:
+	conda:
+		"_envs/nanoplot.yaml"
+	input: 
+		"data/01_cat_reads/{seq_lib}/{barcode}.fastq"
 	output:
-		outputdir+"/{smp}/FilteredReads/Filt_{smp}.fastq"
+		"data/qc/01_NanoPlot_raw/{seq_lib}/{barcode}/{seq_lib}_{barcode}.html"
 	params:
-		minl = config["minReadsLength"],
-		bqual = config["BestQualReadsPercentKeep"]
+		outdir_nanoplot = "data/qc/01_NanoPlot_raw/{seq_lib}/{barcode}"
 	shell:
 		"""
-		filtlong --min_length {params.minl} --keep_percent {params.bqual} {input} > {output}
+		NanoPlot --plots dot --title {wildcards.seq_lib}_{wildcards.barcode} -f svg --N50 --fastq {input} -o {params.outdir_nanoplot} 
 		"""
-rule Flye:
+
+rule filter_reads:
+	conda:
+		"_envs/filtlong.yaml"
 	input:
-		outputdir+"/{smp}/FilteredReads/Filt_{smp}.fastq" 
+		"data/01_cat_reads/{seq_lib}/{barcode}.fastq"
 	output:
-		outputdir+"/{smp}/FlyeAssemblies/Flye_{smp}.fasta"
+		"data/10_filtered_reads/{seq_lib}/{barcode}.fastq"
 	params:
-		outfly = outputdir+"/{smp}/FlyeAssemblies/",
-		thread = config["threadsFlye"]
-	shadow: "shallow"
+		minl = minLength,
+		minqual = minQual
 	shell:
 		"""
-		mkdir -p {params.outfly}
-		flye --nano-hq {input} --threads {params.thread} --out-dir {params.outfly}  && cp {params.outfly}/assembly.fasta {output}
+		filtlong --min_length {params.minl} --min_mean_q {params.minqual} {input} > {output}
 		"""
-rule Polish:
+
+rule flye:
+	conda:
+		"_envs/flye.yaml"
 	input:
-		reads = outputdir+"/{smp}/FilteredReads/Filt_{smp}.fastq",
-		assembly = outputdir+"/{smp}/FlyeAssemblies/Flye_{smp}.fasta"
+		"data/10_filtered_reads/{seq_lib}/{barcode}.fastq" 
 	output:
-		outputdir+"/{smp}/PolishedAssemblies/{smp}.fasta"
-	shadow: "shallow"
+		"data/20_flye_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta"
 	params:
-		medaCPU = config["threadsMedaka"],
-		medaMod = config["medakamodel"],
-		medaBatch = config["batchMedaka"],
-		outdir = outputdir+"/{smp}/PolishedAssemblies"
+		outdir_flye = "data/20_flye_assembly/{seq_lib}/{barcode}/",
+		threads = config["threads_Flye"]
+	shell:
+		"""
+		flye --nano-hq {input} --threads {params.threads} --out-dir {params.outdir_flye}
+		"""
+
+rule polish:
+	conda:
+		"_envs/medaka.yaml"
+	input:
+		reads = "data/10_filtered_reads/{seq_lib}/{barcode}.fastq",
+		assembly = "data/20_flye_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta"
+	output:
+		"data/30_polished_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta"
+	params:
+		medaCPU = config["threads_Medaka"],
+		medaMod = config["medaka_model"],
+		medaBatch = config["batch_Medaka"],
+		outdir_medaka = "data/30_polished_assembly/{seq_lib}/{barcode}/",
 	shell:
 		"""
 		medaka_consensus -i {input.reads}  -d {input.assembly} -t {params.medaCPU} -f -m {params.medaMod} -b {params.medaBatch}
-		cp -r medaka {params.outdir}
-		cp medaka/consensus.fasta {output} 
 		"""		
 
 
 rule abricate:
+	conda:
+		"_envs/abricate.yaml"
 	input:
-		outputdir+"/{smp}/PolishedAssemblies/{smp}.fasta"
+		"data/30_polished_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta"
 	output:
-		outputdir+"/{smp}/ResistanceAbricate/{smp}_abricate.txt"
+		"data/AMR/01_abricate/{seq_lib}/{barcode}/{barcode}_abricate.txt"
 	shell:
 		"""
 		abricate {input} > {output}
 		"""
-rule busco:
-	input:
-		outputdir+"/{smp}/PolishedAssemblies/{smp}.fasta"
-	output:
-		outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt"
-	shadow: 
-		"shallow"
-	params:
-		buscoL = config["buscoLineage"]
-	shell:
-		"""
-		busco -m genome -i {input} -o tmp -l {params.buscoL}
-		cp tmp/short_summary.specific*.txt {output}
-		"""
-
-rule parsebusco:
-	input: 
-		outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt"
-	output:
-		outputdir+"/{smp}/BuscoOutput/{smp}_busco_parsed.txt"
-	shell:
-		"""
-		awk -F"\\t" 'NR>9 && NR<16{{head=head$3"\\t" ; val=val$2"\\t"}}END{{print head;print val}}' {input} > {output}
-		"""
-
-rule mob_recon:
-	input:
-		outputdir+"/{smp}/PolishedAssemblies/{smp}.fasta"
-	output:
-		outputdir+"/{smp}/Mob_recon/contig_report.txt"
-	shadow:
-		"shallow"
-	params:
-		outdir=outputdir+"/{smp}/Mob_recon/",
-		mobthreads=config["threadsMob"]
-	shell:
-		"""
-		mob_recon --force -i {input} -o {params.outdir} -n {params.mobthreads}
-		"""
-rule prokka:
-	input:
-		outputdir+"/{smp}/PolishedAssemblies/{smp}.fasta"
-	output:
-		outputdir+"/{smp}/Prokka/{smp}.gff"
-	params:
-		outdir=outputdir+"/{smp}/Prokka",
-		prefix="{smp}"
-	shell:
-		"""
-		prokka --outdir {params.outdir} --prefix {params.prefix} --force {input}
-		"""
-rule roary:
-	input: 
-		expand(outputdir+"/{smp}/Prokka/{smp}.gff",smp=SAMPLES)		
-	output:
-		outputdir+"/roary/core_gene_alignment.aln"
-	params:
-		outdir=outputdir+"/roary",
-		threads=config["threadsRoary"]
-		
-	shell:
-		"""
-		roary -p {params.threads} -e --mafft -f {params.outdir} {input}
-		"""
-
-rule fasttree:
-	input:
-		outputdir+"/roary/core_gene_alignment.aln"
-	output:
-		outputdir+"/FastTree/tree.newick"
-	shell:
-		"""
-		FastTree -gtr -nt {input} > {output}
-		"""
-

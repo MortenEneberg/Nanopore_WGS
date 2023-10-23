@@ -1,0 +1,26 @@
+# CONFIG file, change paths here
+reads: ".test/data/reads/"
+SQL_database: "/github/workspace/.test/data/databases/NCBI_GTDB_merge.db" #SQL_database from FlexTaxD used when building custom database
+bowtie2_db: "/github/workspace/.test/data/databases/2023-10_bowtie2_db_15bac_test/2023-10_bowtie2_db_15bac_test"
+genomes: "/github/workspace/.test/data/genomes/cat_genomes/test_genomes.fna"
+genomes_faidx: "/github/workspace/.test/data/genomes/cat_genomes/test_genomes.fna.fai"
+genomes_separate: "/github/workspace/.test/data/genomes/bacteria/"
+human_genome: "/github/workspace/.test/data/genomes/bacteria/GCF_000006765.1/GCF_000006765.1_ASM676v1_genomic.fna"
+
+barcodes: "/github/workspace/barcodes/linked/Linked_barcodes_min14.fasta"
+single_barcodes: "/github/workspace/barcodes/Single_barcodes.fasta"
+adapters: "/github/workspace/barcodes/adapter/SRSLY_adapters.fasta"
+spikes: "/github/workspace/spike_ins/ID_conc_spikes.fasta"
+
+##Demultiplex/discard options
+cutadapt_demultiplex_e: "0.2"
+cutadapt_discard_e: "0.2"
+cutadapt_trim_e: "0.2"
+cutadapt_spike_e: "0.2"
+cutadapt_spike_strict_e: "0.15"
+
+
+# Include vars from original config file
+#include: /github/workspace/.test/include_vars.sh
+
+
