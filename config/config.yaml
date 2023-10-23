@@ -8,3 +8,5 @@ threads_Medaka : 4
 batch_Medaka : 100 
 ### MedakaModel (depend on Nanopore device and Guppy version)
 medaka_model: "r1041_e82_400bps_sup_v4.2.0"
+
+reference_genome: .test/data/genomes/GCF_000008865.2_ASM886v2_genomic.fna

@@ -51,6 +51,8 @@ rule all:
 	input:
 		expand("data/30_polished_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta",seq_lib=LIBRARIES, barcode=BARCODES),
 		expand("data/qc/01_NanoPlot_raw/{seq_lib}/{barcode}/{seq_lib}_{barcode}.html",seq_lib=LIBRARIES, barcode=BARCODES),
+		expand("data/qc/10_quast/{seq_lib}/{barcode}/report.tsv",seq_lib=LIBRARIES, barcode=BARCODES),
+		expand("data/qc/20_checkm/{seq_lib}/{barcode}/CheckM.txt",seq_lib=LIBRARIES, barcode=BARCODES)
 		#expand("/{smp}/ResistanceAbricate/{smp}_abricate.txt",smp=SAMPLES),
 		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt",smp=SAMPLES),
 		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco_parsed.txt",smp=SAMPLES),
@@ -66,7 +68,7 @@ rule cat_raw_reads:
         reads = READ_FOLDER
     shell:
         """
-        cat {params.reads}{wildcards.seq_lib}/{wildcards.barcode}*.fastq.gz | gunzip -c > {output.fastq}
+        cat {params.reads}{wildcards.seq_lib}/{wildcards.barcode}/*.fastq.gz | gunzip -c > {output.fastq}
         """
 
 rule Nanoplot_raw:
@@ -96,6 +98,20 @@ rule filter_reads:
 	shell:
 		"""
 		filtlong --min_length {params.minl} --min_mean_q {params.minqual} {input} > {output}
+		"""
+
+rule Nanoplot_filtered:
+	conda:
+		"_envs/nanoplot.yaml"
+	input: 
+		"data/10_filtered_reads/{seq_lib}/{barcode}.fastq"
+	output:
+		"data/qc/02_NanoPlot_filtered/{seq_lib}/{barcode}/{seq_lib}_{barcode}.html"
+	params:
+		outdir_nanoplot = "data/qc/02_NanoPlot_filtered/{seq_lib}/{barcode}"
+	shell:
+		"""
+		NanoPlot --plots dot --title {wildcards.seq_lib}_{wildcards.barcode} -f svg --N50 --fastq {input} -o {params.outdir_nanoplot} 
 		"""
 
 rule flye:
@@ -131,6 +147,37 @@ rule polish:
 		medaka_consensus -i {input.reads}  -d {input.assembly} -t {params.medaCPU} -f -m {params.medaMod} -b {params.medaBatch}
 		"""		
 
+rule quast:
+	conda:
+		"_envs/quast.yaml"
+	input:
+		polished_assembly = "data/30_polished_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta",
+		reads = "data/qc/02_NanoPlot_filtered/{seq_lib}/{barcode}/{seq_lib}_{barcode}.html"
+	output:
+		"data/qc/10_quast/{seq_lib}/{barcode}/report.tsv"
+	params:
+		outdir = "data/qc/10_quast/{seq_lib}/{barcode}/",
+		ref = config["reference_genome"]
+	threads: 
+		5
+	shell:
+		"""
+		quast --threads {threads} --conserved-genes-finding --output-dir {params.outdir} -r {params.ref} -L {input.contigs} --nanopore {input.reads}
+        """
+
+rule checkm:
+	conda:
+		"_envs/checkm.yaml"
+	input:
+		"data/30_polished_assembly/{seq_lib}/{barcode}/assembly_{barcode}.fasta"
+	output:
+		"data/qc/20_checkm/{seq_lib}/{barcode}/CheckM.txt"
+	threads:
+		10
+	shell:
+		"""
+		checkm lineage_wf -f {output} -t {threads} -x fasta {input}
+		"""
 
 rule abricate:
 	conda:
