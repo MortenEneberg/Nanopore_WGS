@@ -6,3 +6,4 @@ logs/**
 data/*
 .vscode/
 data/
+!.test/data/
