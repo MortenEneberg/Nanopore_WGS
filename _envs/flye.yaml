@@ -1,4 +1,4 @@
-name: flye
+name: flye_env
 channels:
   - conda-forge
   - bioconda
