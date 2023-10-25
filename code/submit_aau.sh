@@ -1,7 +1,7 @@
 #!/bin/sh
 # Load all required modules for the job
-module load snakemake/7.18.2-foss-2020b
 module load Miniconda3/4.9.2-foss-2019a
+module load snakemake/7.18.2-foss-2020b
 
 WD="/user_data/men/sepseq/SepSeeQ/2023-10_WGS_Snakemake_pipeline/Nanopore_WGS/"                     #insert AAU WD.
 cd $WD

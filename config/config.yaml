@@ -1,4 +1,4 @@
-reads: /user_data/men/sepseq/SepSeeQ/2023-10_WGS_Snakemake_pipeline/Nanopore_WGS/.test/data/reads/ #Path to folder with reads
+reads: ".test/data/reads/" #Path to folder with reads
 minReadsQual: 10
 minReadsLength: 2000
 threads_Flye: 20
@@ -9,4 +9,5 @@ batch_Medaka : 100
 ### MedakaModel (depend on Nanopore device and Guppy version)
 medaka_model: "r1041_e82_400bps_sup_v4.2.0"
 
-reference_genome: .test/data/genomes/GCF_000008865.2_ASM886v2_genomic.fna
+reference_genome: ".test/data/genomes/GCF_000008865.2_ASM886v2_genomic.fna"
+metadata: ".test/data/metadata/metadata_test.csv"
