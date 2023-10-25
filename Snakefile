@@ -151,7 +151,7 @@ minLength = config["minReadsLength"]
 
 rule all:
 	input:
-		expand("data/30_polished_assembly/{sampleid}/consensus.fasta",sampleid=sample_ids),
+		expand("data/20_flye_assembly/{sampleid}/assembly.fasta",sampleid=sample_ids),
 		expand("data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
 		expand("data/qc/10_quast/{sampleid}/report.html",sampleid=sample_ids),
 		expand("data/qc/20_checkm/{sampleid}/{sampleid}_CheckM.txt",sampleid=sample_ids),
@@ -233,29 +233,11 @@ rule flye:
 		flye --nano-hq {input} --threads {params.threads} --out-dir {params.outdir_flye}/{wildcards.sampleid}
 		"""
 
-rule polish:
-	conda:
-		"_envs/medaka.yaml"
-	input:
-		reads = "data/10_filtered_reads/{sampleid}/{sampleid}_filtered.fastq",
-		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
-	output:
-		"data/30_polished_assembly/{sampleid}/consensus.fasta"
-	params:
-		medaCPU = config["threads_Medaka"],
-		medaMod = config["medaka_model"],
-		medaBatch = config["batch_Medaka"],
-		outdir_medaka = "data/30_polished_assembly",
-	shell:
-		"""
-		medaka_consensus -i {input.reads}  -d {input.assembly} -t {params.medaCPU} -f -m {params.medaMod} -b {params.medaBatch} -o {params.outdir_medaka}/{wildcards.sampleid}
-		"""		
-
 rule quast:
 	conda:
 		"_envs/quast.yaml"
 	input:
-		polished_assembly = "data/30_polished_assembly/{sampleid}/consensus.fasta",
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta",
 		reads = "data/10_filtered_reads/{sampleid}/{sampleid}_filtered.fastq"
 	output:
 		"data/qc/10_quast/{sampleid}/report.html"
@@ -266,18 +248,18 @@ rule quast:
 		5
 	shell:
 		"""
-		quast --threads {threads} --conserved-genes-finding --output-dir {params.outdir}/{wildcards.sampleid} -r {params.ref} -L {input.polished_assembly} --nanopore {input.reads}
+		quast --threads {threads} --conserved-genes-finding --output-dir {params.outdir}/{wildcards.sampleid} -r {params.ref} -L {input.assembly} --nanopore {input.reads}
         """
 
 rule checkm:
 	conda:
 		"_envs/checkm.yaml"
 	input:
-		"data/30_polished_assembly/{sampleid}/consensus.fasta"
+		"data/20_flye_assembly/{sampleid}/assembly.fasta"
 	output:
 		"data/qc/20_checkm/{sampleid}/{sampleid}_CheckM.txt"
 	params:
-		assembly_folder = "data/30_polished_assembly/",
+		assembly_folder = "data/20_flye_assembly/",
 		outdir = "data/qc/20_checkm"
 	threads:
 		10
@@ -290,7 +272,7 @@ rule abricate:
 	conda:
 		"_envs/abricate.yaml"
 	input:
-		"data/30_polished_assembly/{sampleid}/consensus.fasta"
+		"data/20_flye_assembly/{sampleid}/assembly.fasta"
 	output:
 		"data/AMR/01_abricate/{sampleid}/abricate.txt"
 	shell:
