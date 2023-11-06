@@ -156,7 +156,8 @@ rule all:
 		expand("data/qc/10_quast/{sampleid}/report.html",sampleid=sample_ids),
 		expand("data/qc/20_checkm/{sampleid}/{sampleid}_CheckM.txt",sampleid=sample_ids),
 		expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
-		expand("data/AMR/01_abricate/{sampleid}/abricate.txt",sampleid=sample_ids)
+		expand("data/AMR/01_abricate/{sampleid}/abricate.txt",sampleid=sample_ids),
+		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids)
 		#expand("/{smp}/ResistanceAbricate/{smp}_abricate.txt",smp=SAMPLES),
 		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt",smp=SAMPLES),
 		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco_parsed.txt",smp=SAMPLES),
@@ -266,6 +267,22 @@ rule checkm:
 	shell:
 		"""
 		checkm lineage_wf -f {output} -t {threads} -x fasta {params.assembly_folder}/{wildcards.sampleid} {params.outdir}/{wildcards.sampleid}/
+		"""
+
+rule gtdbtk:
+	conda:
+		"_envs/gtdbtk.yaml"
+	input:
+		"data/20_flye_assembly/{sampleid}/assembly.fasta"
+	output:
+		"data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv"
+	params:
+		outdir = "data/qc/30_gtdbtk/"
+	threads:
+		10
+	shell:
+		"""
+		gtdbtk classify_wf --genome_dir {input} --cpus {threads} --pplacer_cpus {threads} --out_dir {params.outdir}/{wildcards.sampleid} --force
 		"""
 
 rule abricate:
