@@ -26,4 +26,4 @@ WD="/home/projects/cu_00014/data/sepseq_WGS/"
 cd $WD
 
 #  Put your job commands after this line. Load all required modules before submitting this script.
-snakemake --latency-wait 90 -s Snakefile --configfile config/config.yaml --cores 40 --use-conda --conda-frontend conda 
+snakemake --latency-wait 90 -s Snakefile --configfile config/config_pbs.yaml --cores 40 --use-conda --conda-frontend conda 

@@ -4,3 +4,5 @@ channels:
   - bioconda
 dependencies:
   - gtdbtk=2.3.2
+variables:
+  GTDBTK_DATA_PATH: "/databases/gtdb-tk/release214/"

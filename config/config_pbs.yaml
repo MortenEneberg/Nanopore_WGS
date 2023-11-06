@@ -1,0 +1,8 @@
+reads: ".test/data/reads/" #Path to folder with reads
+minReadsQual: 10
+minReadsLength: 2000
+threads_Flye: 20
+checkm2db: "/home/projects/cu_00014/data/databases/CheckM2_database/uniref100.KO.1.dmnd"
+
+reference_genome: ".test/data/genomes/GCF_000008865.2_ASM886v2_genomic.fna"
+metadata: ".test/data/metadata/metadata_test.csv"

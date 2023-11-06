@@ -154,17 +154,10 @@ rule all:
 		expand("data/20_flye_assembly/{sampleid}/assembly.fasta",sampleid=sample_ids),
 		expand("data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
 		expand("data/qc/10_quast/{sampleid}/report.html",sampleid=sample_ids),
-		expand("data/qc/20_checkm/{sampleid}/{sampleid}_CheckM.txt",sampleid=sample_ids),
+		expand("data/qc/20_checkm/{sampleid}/quality_report.tsv",sampleid=sample_ids),
 		expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
 		expand("data/AMR/01_abricate/{sampleid}/abricate.txt",sampleid=sample_ids),
 		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids)
-		#expand("/{smp}/ResistanceAbricate/{smp}_abricate.txt",smp=SAMPLES),
-		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco.txt",smp=SAMPLES),
-		#expand(outputdir+"/{smp}/BuscoOutput/{smp}_busco_parsed.txt",smp=SAMPLES),
-		#expand(outputdir+"/{smp}/Mob_recon/contig_report.txt",smp=SAMPLES),
-		#expand(outputdir+"/{smp}/Prokka/{smp}.gff",smp=SAMPLES),
-		#outputdir+"/roary/core_gene_alignment.aln",
-		#outputdir+"/FastTree/tree.newick"
 
 rule cat_raw_reads:
 	output:
@@ -252,21 +245,22 @@ rule quast:
 		quast --threads {threads} --conserved-genes-finding --output-dir {params.outdir}/{wildcards.sampleid} -r {params.ref} -L {input.assembly} --nanopore {input.reads}
         """
 
-rule checkm:
+rule checkm2:
 	conda:
-		"_envs/checkm.yaml"
+		"_envs/checkm2.yaml"
 	input:
 		"data/20_flye_assembly/{sampleid}/assembly.fasta"
 	output:
-		"data/qc/20_checkm/{sampleid}/{sampleid}_CheckM.txt"
+		"data/qc/20_checkm/{sampleid}/quality_report.tsv"
 	params:
-		assembly_folder = "data/20_flye_assembly/",
-		outdir = "data/qc/20_checkm"
+		assembly_folder = "data/20_flye_assembly",
+		outdir = "data/qc/20_checkm",
+		checkm2db = config["checkm2db"]
 	threads:
 		10
 	shell:
 		"""
-		checkm lineage_wf -f {output} -t {threads} -x fasta {params.assembly_folder}/{wildcards.sampleid} {params.outdir}/{wildcards.sampleid}/
+		checkm2 predict --threads {threads} --input {input} --database_path {params.checkm2db} --output-directory {params.outdir}/{wildcards.sampleid}
 		"""
 
 rule gtdbtk:
@@ -277,12 +271,13 @@ rule gtdbtk:
 	output:
 		"data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv"
 	params:
+		in_dir = "data/20_flye_assembly",
 		outdir = "data/qc/30_gtdbtk/"
 	threads:
 		10
 	shell:
 		"""
-		gtdbtk classify_wf --genome_dir {input} --cpus {threads} --pplacer_cpus {threads} --out_dir {params.outdir}/{wildcards.sampleid} --force
+		gtdbtk classify_wf --genome_dir {params.in_dir}/{wildcards.sampleid}/ --extension fasta --cpus {threads} --pplacer_cpus {threads} --skip_ani_screen --out_dir {params.outdir}/{wildcards.sampleid} --force
 		"""
 
 rule abricate:
