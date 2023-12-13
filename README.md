@@ -7,13 +7,14 @@
 A Snakemake workflow to assemble genomes from Nanopore WGS data
 
 # Getting started
-'git clone https://github.com/MortenEneberg/Nanopore_WGS/'
-
-'cd path/to/local_repo/'
+```
+git clone https://github.com/MortenEneberg/Nanopore_WGS/
+cd Nanopore_WGS
+```
 
 # Running the Snakemake pipeline
 
-The pipeline is executed via the submission scripts (e.g. 'bash code/submit_aau.sh'). Here the modules for loading conda and snakemake are specified. Alternatively, execute the pipeline in a conda env with these dependencies.
+The pipeline is executed via the submission scripts (e.g. `bash code/submit_aau.sh`). Here the modules for loading conda and snakemake are specified. Alternatively, execute the pipeline in a conda env with these dependencies.
 
 Specify paths to:
 - gtdb-tk database in the gtdbtk.yaml environment file
