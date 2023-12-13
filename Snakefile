@@ -42,6 +42,7 @@ def list_directories(folder_path):
     directories = [d for d in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, d))]
     return directories
 
+
 def process_sample_fastq_file(metadata_path_set, root_folder_path_set, output_dir_set, target_sample_id_set):
 	"""
     Process .fastq.gz files based on the provided sample ID, extract information from metadata,
@@ -66,11 +67,11 @@ def process_sample_fastq_file(metadata_path_set, root_folder_path_set, output_di
 
             # Searching for the sample ID in the metadata.	
 			for row in reader:
-				current_sample_id = row.get('sampleID')
+				current_sample_id = row.get('sample_id')
 				if current_sample_id == sample_id:
 					sample_id_found = True
-					lib = row['lib']
-					bar = row['bar']
+					lib = row['lib_flowcell_id']
+					bar = row['lib_barcode']
 
 					# Construct the file path for .fastq.gz files.
 					fastq_file_path = os.path.join(root_folder_path, lib, bar)
@@ -102,7 +103,7 @@ def process_sample_fastq_file(metadata_path_set, root_folder_path_set, output_di
 
 					# Concatenate contents, write to a new .fastq file, and compress it.
 					if concatenated_content:
-						output_fastq_file = os.path.join(sample_output_folder, f"{sample_id}_reads.fastq")
+						output_fastq_file = os.path.join(sample_output_folder, f"{sample_id}.fastq")
 						with open(output_fastq_file, 'w') as f_out:
 							f_out.write(''.join(concatenated_content))
 
@@ -111,7 +112,7 @@ def process_sample_fastq_file(metadata_path_set, root_folder_path_set, output_di
 			if not sample_id_found:
 				print(f"Sample ID {sample_id} not found in the metadata.")
 			elif processed_files:
-				print(f"Processed files for sample ID {sample_id}: {', '.join(processed_files)}")
+				print(f"Processed files for sample ID {sample_id}")
 			else:
 				print(f"No .fastq.gz files found for sample ID {sample_id} in the expected directory.")
 
@@ -120,6 +121,7 @@ def process_sample_fastq_file(metadata_path_set, root_folder_path_set, output_di
 
     # You can return something from your function if needed, for example, the path to the new file.
 	return os.path.join(output_dir, sample_id, f"{sample_id}_reads.fastq.gz") if sample_id_found else None
+
 
 
 def extract_sampleID_column(file_path):
@@ -132,14 +134,16 @@ def extract_sampleID_column(file_path):
         reader = csv.DictReader(csvfile)
 
         # Check if 'sampleID' exists in the file
-        if 'sampleID' in reader.fieldnames:
+        if 'sample_id' in reader.fieldnames:
             # Iterate over rows and add the 'sampleID' values to our list
             for row in reader:
-                sample_ids.append(row['sampleID'])
+                sample_ids.append(row['sample_id'])
         else:
-            raise ValueError("No 'sampleID' column in the CSV")
+            raise ValueError("No 'sample_id' column in the CSV")
 
     return sample_ids
+
+
 
 READ_FOLDER = config["reads"]
 METADATA = config["metadata"]
@@ -157,42 +161,53 @@ rule all:
 		expand("data/qc/20_checkm/{sampleid}/quality_report.tsv",sampleid=sample_ids),
 		expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
 		expand("data/AMR/01_abricate/{sampleid}/abricate.txt",sampleid=sample_ids),
-		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids)
+		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids),
+		"data/qc/40_fastani/fastani_report.tsv",
+		expand("data/qc/51_cmseq/{sampleid}/polysnp.tsv", sampleid=sample_ids),
+		expand("data/qc/51_cmseq/{sampleid}/cov.tsv", sampleid=sample_ids),
+		expand("data/qc/11_seqkit/{sampleid}/seqkit.tsv", sampleid=sample_ids),
 
 rule cat_raw_reads:
 	output:
-		fastq = "data/01_cat_reads/{sampleid}/{sampleid}_reads.fastq"
+		fastq = "data/01_cat_reads/{sampleid}/{sampleid}.fastq"
 	params:
 		outdir = "data/01_cat_reads/",
 		reads = config["reads"],
 		metadata = config["metadata"],
+	threads:
+		2
 	run:
 		process_sample_fastq_file({params.metadata}, {params.reads}, {params.outdir}, {wildcards.sampleid})
+
 
 rule Nanoplot_raw:
 	conda:
 		"_envs/nanoplot.yaml"
 	input: 
-		"data/01_cat_reads/{sampleid}/{sampleid}_reads.fastq"
+		"data/01_cat_reads/{sampleid}/{sampleid}.fastq"
 	output:
 		"data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html"
 	params:
 		outdir_nanoplot = "data/qc/01_NanoPlot_raw"
+	threads:
+		10
 	shell:
 		"""
-		NanoPlot --plots dot -f svg --N50 --fastq {input} -o {params.outdir_nanoplot}/{wildcards.sampleid} 
+		NanoPlot --plots dot -f svg --N50 --fastq {input} -t {threads} -o {params.outdir_nanoplot}/{wildcards.sampleid} 
 		"""
 
 rule filter_reads:
 	conda:
 		"_envs/filtlong.yaml"
 	input:
-		"data/01_cat_reads/{sampleid}/{sampleid}_reads.fastq"
+		"data/01_cat_reads/{sampleid}/{sampleid}.fastq"
 	output:
 		"data/10_filtered_reads/{sampleid}/{sampleid}_filtered.fastq"
 	params:
 		minl = minLength,
 		minqual = minQual
+	threads:
+		5
 	shell:
 		"""
 		filtlong --min_length {params.minl} --min_mean_q {params.minqual} {input} > {output}
@@ -207,9 +222,11 @@ rule Nanoplot_filtered:
 		"data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html"
 	params:
 		outdir_nanoplot = "data/qc/02_NanoPlot_filtered"
+	threads:
+		10
 	shell:
 		"""
-		NanoPlot --plots dot -f svg --N50 --fastq {input} -o {params.outdir_nanoplot}/{wildcards.sampleid} 
+		NanoPlot --plots dot -f svg --N50 --fastq {input} -t {threads} -o {params.outdir_nanoplot}/{wildcards.sampleid} 
 		"""
 
 rule flye:
@@ -222,9 +239,16 @@ rule flye:
 	params:
 		outdir_flye = "data/20_flye_assembly",
 		threads = config["threads_Flye"]
+	threads:
+		config["threads_Flye"]
 	shell:
 		"""
-		flye --nano-hq {input} --threads {params.threads} --out-dir {params.outdir_flye}/{wildcards.sampleid}
+		size=$(stat -c '%s' {input})
+        if [ $size -gt 5000000 ]; then
+        flye --nano-hq {input} --threads {params.threads} --out-dir {params.outdir_flye}/{wildcards.sampleid}
+        else 
+        touch {output}
+        fi
 		"""
 
 rule quast:
@@ -242,7 +266,12 @@ rule quast:
 		5
 	shell:
 		"""
+		size=$(stat -c '%s' {input})
+		if [ $size -gt 0 ]; then
 		quast --threads {threads} --conserved-genes-finding --output-dir {params.outdir}/{wildcards.sampleid} -r {params.ref} -L {input.assembly} --nanopore {input.reads}
+		else 
+		touch {output}
+		fi
         """
 
 rule checkm2:
@@ -260,7 +289,12 @@ rule checkm2:
 		10
 	shell:
 		"""
+		size=$(stat -c '%s' {input})
+		if [ $size -gt 0 ]; then
 		checkm2 predict --threads {threads} --input {input} --database_path {params.checkm2db} --output-directory {params.outdir}/{wildcards.sampleid}
+		else 
+		touch {output}
+		fi
 		"""
 
 rule gtdbtk:
@@ -274,10 +308,15 @@ rule gtdbtk:
 		in_dir = "data/20_flye_assembly",
 		outdir = "data/qc/30_gtdbtk/"
 	threads:
-		10
+		30
 	shell:
 		"""
+		size=$(stat -c '%s' {input})
+		if [ $size -gt 0 ]; then
 		gtdbtk classify_wf --genome_dir {params.in_dir}/{wildcards.sampleid}/ --extension fasta --cpus {threads} --pplacer_cpus {threads} --skip_ani_screen --out_dir {params.outdir}/{wildcards.sampleid} --force
+		else 
+		touch {output}
+		fi
 		"""
 
 rule abricate:
@@ -287,7 +326,109 @@ rule abricate:
 		"data/20_flye_assembly/{sampleid}/assembly.fasta"
 	output:
 		"data/AMR/01_abricate/{sampleid}/abricate.txt"
+	threads:
+		5
 	shell:
 		"""
+		size=$(stat -c '%s' {input})
+		if [ $size -gt 0 ]; then
 		abricate {input} > {output}
+		else 
+		touch {output}
+		fi
+		"""
+
+rule generate_genome_list:
+	input:
+		assemblies = expand("data/20_flye_assembly/{sampleid}/assembly.fasta", sampleid = sample_ids)
+	output:
+		genome_list = "data/qc/39_fastani_genome_list/genome_list.txt"
+	threads:
+		5
+	shell:
+		"""
+		for assembly in {input.assemblies}; do
+			if [ -s "$assembly" ]; then
+				echo "$assembly" >> {output.genome_list}
+			fi
+		done
+		"""
+
+rule fastani:
+	conda:
+		"_envs/fastani.yaml"
+	input:
+		genome_list = "data/qc/39_fastani_genome_list/genome_list.txt"
+	output:
+		"data/qc/40_fastani/fastani_report.tsv"
+	threads:
+		40
+	shell:
+		"""
+		fastANI --ql {input.genome_list} --rl {input.genome_list} -o {output}
+		"""
+
+rule remap_reads:
+	conda:
+		"_envs/minimap2.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta",
+		reads = "data/10_filtered_reads/{sampleid}/{sampleid}_filtered.fastq"
+	output:
+		bam = "data/qc/50_bam/{sampleid}/bamfile.sorted.bam"
+	params:
+		outdir = "data/qc/50_bam/",
+	threads: 
+		10
+	shell:
+		"""
+		size=$(stat -c '%s' {input.assembly})
+		if [ $size -gt 0 ]; then
+		minimap2 -ax map-ont -t {threads} {input.assembly} {input.reads} | \
+		samtools view -b | \
+		samtools sort -o {output.bam} -@ {threads}
+		else 
+		touch {output.bam}
+		fi
+		"""
+
+rule cmseq:
+	conda:
+		"_envs/cmseq.yaml"
+	input:
+		bam = "data/qc/50_bam/{sampleid}/bamfile.sorted.bam"
+	output:
+		polysnp = "data/qc/51_cmseq/{sampleid}/polysnp.tsv",
+		cov = "data/qc/51_cmseq/{sampleid}/cov.tsv",
+	threads: 
+		3
+	shell:
+		"""
+		size=$(stat -c '%s' {input.bam})
+		if [ $size -gt 0 ]; then
+		breadth_depth.py --sortindex {input.bam} > {output.cov}
+		poly.py --sortindex {input.bam} > {output.polysnp}
+		else 
+		touch {output.polysnp}
+		touch {output.cov}
+		fi
+		"""
+
+rule datayield:
+	conda:
+		"_envs/seqkit.yaml"
+	input:
+		reads = "data/10_filtered_reads/{sampleid}/{sampleid}_filtered.fastq"
+	output:
+		report = "data/qc/11_seqkit/{sampleid}/seqkit.tsv",
+	threads: 
+		3
+	shell:
+		"""
+		size=$(stat -c '%s' {input.reads})
+		if [ $size -gt 0 ]; then
+		seqkit stats -j {threads} -a -T {input.reads} >> {output.report}
+		else 
+		touch {output.report}
+		fi
 		"""

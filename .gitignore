@@ -6,3 +6,4 @@ logs/**
 .vscode/
 data/
 !.test/data/
+contamination_investigation/

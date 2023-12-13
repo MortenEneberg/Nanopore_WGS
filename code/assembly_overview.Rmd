@@ -1,0 +1,457 @@
+---
+title: "AMR_WGS_001 Assembly overview"
+output:
+  html_document: default
+  pdf_document: default
+date: "2023-11-14"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/home/projects/cu_00014/data/sepseq_WGS/analysis/Nanopore_WGS/")
+```
+
+## Load packages
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(readxl)
+library(viridis)
+library(writexl)
+library(ape)
+```
+
+## Analysis of the first isolate sequencing batch
+
+## Load metadata
+```{r, warning=FALSE, message=FALSE}
+metadata<-read_csv("/home/projects/cu_00014/data/sepseq_WGS/metadata/metadata_AMR_WGS_001.csv")
+
+extended_metadata<-read_tsv("/home/projects/cu_00014/data/sepseq_WGS/metadata/metadata_extended_all_selected_isolates_non_sensitive.tsv") %>%
+  separate(Pit, sep = "", into = c(NA,"box","ps_num","ps_let"), remove = F) %>%
+  mutate(across(c(box, ps_num, ps_let), ~ str_sub(., 2))) %>%
+  unite(temp, c(box,ps_let), sep = "_") %>%
+  unite(sample_id, c(temp,ps_num), sep = "") %>%
+  select(-Indate, Box, Pit)
+```
+
+## Load checkm2 data in
+```{r, warning=FALSE, message=FALSE}
+
+read_checkm<-function(file){
+    sample_id = str_split(file, pattern = "/")[[1]][length(str_split(file, pattern = "/")[[1]])-1]
+    checkm<-read_tsv(file = file, col_names = T, comment = "#", show_col_types = FALSE) %>%
+      mutate(sample_id=sample_id)
+      
+    return(checkm) 
+}        
+
+combine_checkm<-function(file_list){
+  combined_checkm<-data.frame()
+  for (i in file_list) {
+    if (file.info(i)$size > 0) {
+      checkm_batch<-read_checkm(i)
+      combined_checkm<-combined_checkm %>%
+        bind_rows(
+          checkm_batch
+        )
+    } 
+  }
+  return(combined_checkm)
+  
+}
+
+checkm2_paths<-paste0("data/qc/20_checkm/", list.files("data/qc/20_checkm/", pattern = "quality_report.tsv", recursive = TRUE))
+
+df_checkm2<-combine_checkm(checkm2_paths) %>%
+  select(-Name, -Completeness_Model_Used, -Translation_Table_Used)
+head(df_checkm2)
+```
+
+## Load gtdb-tk data in
+```{r, warning=FALSE, message=FALSE}
+
+read_gtdbtk<-function(file){
+    sample_id = str_split(file, pattern = "/")[[1]][length(str_split(file, pattern = "/")[[1]])-1]
+    gtdbtk<-read_tsv(file = file, col_names = T, comment = "#", show_col_types = FALSE) %>%
+      mutate(sample_id=sample_id) %>%
+      mutate_if(is.double, as.character)
+    return(gtdbtk) 
+}        
+
+combine_gtdbtk<-function(file_list){
+  combined_gtdbtk<-data.frame()
+  for (i in file_list) {
+    if (file.info(i)$size > 0) {
+      gtdbtk_batch<-read_gtdbtk(i)
+      combined_gtdbtk<-combined_gtdbtk %>%
+        bind_rows(
+          gtdbtk_batch
+        )
+    } 
+  }
+  return(combined_gtdbtk)
+  
+}
+
+gtdbtk_paths<-paste0("data/qc/30_gtdbtk/", list.files("data/qc/30_gtdbtk/", pattern = "gtdbtk.bac120.summary.tsv", recursive = TRUE)) 
+gtdbtk_paths<-gtdbtk_paths[!grepl("classify", gtdbtk_paths)]
+
+df_gtdbtk<-combine_gtdbtk(gtdbtk_paths) %>%
+  select(-user_genome)
+```
+
+
+## Load seqkit data in for filtered reads
+```{r, warning=FALSE, message=FALSE}
+
+read_seqkit<-function(file){
+    sample_id = str_split(file, pattern = "/")[[1]][length(str_split(file, pattern = "/")[[1]])-1]
+    seqkit<-read_tsv(file = file, col_names = T, comment = "#", show_col_types = FALSE) %>%
+      mutate(sample_id=sample_id)
+      
+    return(seqkit) 
+}        
+
+combine_seqkit<-function(file_list){
+  combined_seqkit<-data.frame()
+  for (i in file_list) {
+    if (file.info(i)$size > 0) {
+      seqkit_batch<-read_seqkit(i)
+      combined_seqkit<-combined_seqkit %>%
+        bind_rows(
+          seqkit_batch
+        )
+    } 
+  }
+  return(combined_seqkit)
+  
+}
+
+seqkit_paths<-paste0("data/qc/11_seqkit/", list.files("data/qc/11_seqkit/", pattern = ".tsv", recursive = TRUE))
+
+df_seqkit<-combine_seqkit(seqkit_paths) 
+
+```
+
+## Combine data
+```{r, warning=FALSE, message=FALSE}
+df_merged<-metadata %>%
+  left_join(df_checkm2, by = "sample_id") %>%
+  left_join(df_gtdbtk, by = "sample_id") %>%
+  left_join(extended_metadata, by = "sample_id") %>%
+  left_join(df_seqkit, by = "sample_id") %>%
+  separate(classification, into = c("domain", "phylum", "class", "order", "family",
+                                    "genus", "species"), sep = ";") %>%
+  mutate(type = if_else(grepl("NC", sample_id), "NC", 
+          if_else(grepl("PC", sample_id), "PC",
+            if_else(grepl("Pantoea", sample_id), "Pantoea", "Sample"))
+        ),
+        label = if_else(Completeness < 95 | is.na(Completeness), sample_id, ""),
+        expected_spp = if_else(type == "Sample", "Escherichia coli", type),
+        across(all_of(c("domain", "phylum", "class", "order", "family",
+                                    "genus", "species")), ~ str_sub(., start = 3 + 1)))
+
+head(df_merged)
+```
+
+## DNA extraction concentrations
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  ggplot(aes(x = type, y = ext_conc)) +
+  geom_boxplot()
+```
+
+## Plot the checkm data
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  ggplot(aes(x=Completeness, y=Contamination)) +
+  geom_bin2d(bins = 70) +
+  scale_fill_continuous(type = "viridis") +
+  theme_bw()
+```
+
+## Ext_conc against completeness
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  ggplot(aes(x=Completeness, y=ext_conc, color = type, label = label)) +
+  geom_point() +
+  geom_text(vjust=-1, size = 3)
+```
+
+## Ext_conc against data yield
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  ggplot(aes(x = ext_conc, y = sum_len/10^6, color = type, size = Genome_Size)) +
+  geom_point() + 
+  theme_bw() +
+  xlab("DNA concentration [ng/uL]") + 
+  ylab("Data [Mbp]") +
+  scale_x_log10()
+```
+
+## Data yield against completeness
+```{r, warning=FALSE, message=FALSE}
+#We need approximately 100Mbp to get a complete genome
+df_merged %>%
+  ggplot(aes(x = sum_len/10^6, y = Completeness, color = type)) +
+  geom_point() + 
+  theme_bw() +
+  xlab("Data [Mbp]") + 
+  ylab("Completeness") +
+  scale_x_log10()
+```
+
+## Data yield against contig_n50
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  ggplot(aes(x = sum_len/10^6, y = Contig_N50/10^6, color = type)) +
+  geom_point() + 
+  theme_bw() +
+  xlab("Data [Mbp]") + 
+  ylab("Contig N50 [Mbp]")
+```
+
+## How many of the assemblies were actually E. coli??
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  mutate(compare = if_else(expected_spp == "Escherichia coli", if_else(expected_spp == species, "True", "False"),
+                           "Control")) %>%
+  group_by(compare) %>%
+  summarise(n = n())
+
+#The two NAs are sample 823_G9 and 825_F1, which were also incomplete in the checkm analysis
+```
+
+## Genome size
+```{r, warning=FALSE, message=FALSE}
+df_merged %>%
+  ggplot(aes(x = Genome_Size, y = type)) +
+  geom_violin() +
+  geom_point(position = position_jitter(seed = 1, width = 0.1)) + 
+  theme_bw() +
+  xlab("Genome size [Mbp]") + 
+  ylab("Type")
+```
+
+## Assessing the control samples
+```{r, warning=FALSE, message=FALSE}
+df_control<-df_merged %>%
+  filter(type %in% c("PC", "NC")) %>%
+  select(sample_id, ext_conc, Genome_Size, Completeness, Contamination, species)
+  
+#Interestingly, the negative control sample had a genome from an E. coli. Since the extraction concentration was low (and the genome somewhat incomplete), this could suggest that there has been some contamination between samples. What did the extraction NC contain exactly?
+head(df_control)
+```
+
+## Analyse fastani results to check where the contamination came from
+```{r, warning=FALSE, message=FALSE}
+df_fastani <- read_tsv("data/qc/40_fastani/fastani_report.tsv", col_names = c("query", "subject", "ani", NA, NA)) %>%
+  select(query, subject, ani)%>%
+  mutate(query = str_extract(query, "(?<=/)[^/]+(?=/[^/]+$)"),
+         subject = str_extract(subject, "(?<=/)[^/]+(?=/[^/]+$)"),
+         genome_pair = paste(pmin(query, subject), pmax(query, subject), sep = "-")) %>%
+  filter(query != subject) %>% #remove self ani results
+  filter(query != "Pantoea") %>% #remove pantoea results
+  filter(subject != "Pantoea")
+
+df_merged_ani<-df_fastani %>%
+  left_join(df_merged, by = c("query" = "sample_id"), keep = T) 
+
+highest_values <- df_merged_ani %>%
+  group_by(genome_pair) %>%
+  summarize(highest_value = max(ani)) %>%
+  ungroup()
+
+df_fastani_highest <- df_merged_ani %>%
+  left_join(highest_values, by = "genome_pair") %>%
+  mutate(ani = highest_value) %>%
+  select(-highest_value) #%>%
+  #distinct(genome_pair, .keep_all = T)
+
+df_fastani_NC <- df_fastani_highest %>%
+  filter(query == "AMR_WGS_001_ext_NC_01") 
+
+df_fastani_NC %>%
+  arrange(desc(ani)) %>%
+  head()
+
+#It does not look like that there is an obvious cross contamination from a particular well. This could however be due to an incomplete genome in the negative control sample that gets a falsely low identity to .
+
+df_fastani_highest %>%
+  arrange(desc(ani)) %>%
+  distinct(genome_pair, .keep_all = T) %>%
+  head()
+
+#Other genomes are much more closely related indicating that it could be due to the incomplete genome
+```
+
+## Analyse spread of ani values
+```{r, warning=FALSE, message=FALSE}
+#Remove results from incomplete genomes
+complete<-df_merged %>%
+  filter(Completeness > 95 & Contamination < 5) %>%
+  filter(!type %in% c("NC", "PC", "Pantoea")) %>%
+  pull(sample_id)
+
+df_fastani_complete <- df_fastani_highest %>%
+  filter(subject %in% complete) %>%
+  filter(query %in% complete)
+
+#Assessing the spread of ani values reveals that several samples are very closely related, but there are distinct groups
+df_fastani_complete %>%
+  distinct(genome_pair, .keep_all = T) %>%
+  ggplot(aes(x = 1, y = ani)) +
+  geom_violin() +
+  theme_bw() +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+## Make a tree, 1) compute distance matrix
+```{r, warning=FALSE, message=FALSE}
+#Function to compute distance matrix
+makeFastANIDistMatrix <- function(df, keep_asym = FALSE, frac = FALSE, suffix = "fna") {
+  # Initiation
+  ani <- df
+  names(ani) <- c("Query", "Reference", "ANI")
+  ani$Query <- sapply(ani$Query, .extractSampleName, suffix)
+  ani$Reference <- sapply(ani$Reference, .extractSampleName, suffix)
+  ani$D <- 100 - ani$ANI  # Calculate distances from ANIs
+  ani <- ani[, -3]  # Remove the column "ANI"
+  
+  if (frac) {
+    ani$D <- ani$D / 100  # Convert percentages to decimal fractions
+    precision <- 6  # Number of decimals to keep
+  } else {
+    precision <- 4  # The same as FastANI
+  }
+  
+  ids <- sort(union(ani$Query, ani$Reference), decreasing = FALSE)
+  n <- length(ids)
+  M <- matrix(data = NA, nrow = n, ncol = n, dimnames = list(ids, ids))
+  diag(M) <- 0
+  
+  # Stage one: copy values from the data frame to matrix M
+  for (i in 1 : nrow(ani)) {
+    rw <- ani[i, ]  # Extract one row from the data frame to increase the speed
+    q <- rw$Query
+    r <- rw$Reference
+    if (r != q) {
+      M[q, r] <- rw$D
+    }
+  }
+  
+  # Stage two: convert M into a symmetric matrix by taking the mean distance between every pair of genomes
+  # This is the same method that FastANI uses for generating the PHYLIP-formatted lower triangular matrix.
+  # See https://github.com/ParBLiSS/FastANI/issues/36
+  if (keep_asym) {
+    M_asym <- M
+  }
+  
+  for (i in 1 : (n - 1)) {
+    for (j in (i + 1) : n) {
+      val_up <- M[i, j]  # The value in the upper triangle
+      val_lo <- M[j, i]  # The value in the lower triangle
+      v <- round((val_up + val_lo) / 2, digits = precision)  # The same precision as FastANI (after dividing values by 100)
+      M[i, j] <- v
+      M[j, i] <- v
+    }
+  }
+  
+  # Return the result
+  if (keep_asym) {
+    out <- list("D" = M, "D_asym" = M_asym)
+  } else {
+    out <- M
+  }
+  
+  return(out)
+}
+
+.extractSampleName <- function(fasta_path, suffix) {
+  fields <- unlist(strsplit(x = fasta_path, split = "/", fixed = TRUE))
+  f <- fields[length(fields)]
+  f <- gsub(pattern = paste0(".", suffix), replacement = "", x = f, fixed = TRUE)
+  return(f)
+}
+
+
+#Compute distance matrix
+dist_matrix<-makeFastANIDistMatrix(df_fastani_complete %>% select(query, subject, ani))
+```
+
+## Make a tree, 2) compute the tree
+```{r, warning=FALSE, message=FALSE}
+NJ <- nj(dist_matrix)
+tree <- as.phylo(NJ)
+dir.create(file.path("data/trees/"), recursive = TRUE)
+write.tree(phy=tree, file="data/trees/AMR_WGS_001.nwk")
+```
+
+## Make a tree, 3) visualise the tree (Done in iTol for now)
+```{r, warning=FALSE, message=FALSE}
+#ggtree(tree) +
+#  geom_tiplab(size = 3) +
+#  geom_treescale() + 
+#  theme_tree2()
+#The tree confirms the suspicion of 2 major groups
+```
+
+## Metadata for iTOL tree
+```{r, warning=FALSE, message=FALSE}
+replace_values <- function(x) {
+  x %>%
+    str_replace_all("S", "0") %>%
+    str_replace_all("R", "100") %>%
+    str_replace_all("I", "20")
+}
+
+df_AMR<-df_merged %>%
+  select(sample_id, SirAmpicillin, SirCeftazidim, SirCefotaxim, SirCefuroxim, SirCiprofloxacin, SirGentamicin, SirPiperacillintazobact13550) %>%
+  mutate(across(starts_with("Sir"), replace_values)) %>%
+  filter(sample_id %in% complete)
+
+write_csv(df_AMR, file = "data/trees/ITOL_annotations.csv") 
+```
+
+
+## Contamination in the NC. Analysis of single copy genes in NC and PC samples
+```{r, warning=FALSE, message=FALSE}
+
+read_gtdbtk_identify<-function(file){
+    sample_id = str_split(file, pattern = "/")[[1]][length(str_split(file, pattern = "/")[[1]])-2]
+    gtdbtk_identify<-read_tsv(file = file, col_names = T, comment = "#", show_col_types = FALSE) %>%
+      mutate(sample_id=sample_id)
+      
+    return(gtdbtk_identify) 
+}        
+
+combine_gtdbtk_identify<-function(file_list){
+  combined_gtdbtk_identify<-data.frame()
+  for (i in file_list) {
+    if (file.info(i)$size > 0) {
+      gtdbtk_identify_batch<-read_gtdbtk_identify(i)
+      combined_gtdbtk_identify<-combined_gtdbtk_identify %>%
+        bind_rows(
+          gtdbtk_identify_batch
+        )
+    } 
+  }
+  return(combined_gtdbtk_identify)
+  
+}
+
+gtdbtk_identify_paths<-paste0("contamination_investigation/identify/", list.files("contamination_investigation/identify/", pattern = "gtdbtk.bac120.markers_summary.tsv", recursive = TRUE))
+
+
+df_gtdbtk_identify<-combine_gtdbtk_identify(gtdbtk_identify_paths) 
+
+df_gtdbtk_identify %>%
+  select(sample_id, number_missing_genes, number_unique_genes)
+
+#We see that there are 19 missing genes in the negative control. We should subset the analysis to these genes for all samples to see if the NC sample is closely related to any of the other samples.
+```
+

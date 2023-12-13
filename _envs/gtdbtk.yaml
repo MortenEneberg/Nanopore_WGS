@@ -5,4 +5,4 @@ channels:
 dependencies:
   - gtdbtk=2.3.2
 variables:
-  GTDBTK_DATA_PATH: "/databases/gtdb-tk/release214/"
+  GTDBTK_DATA_PATH: "/home/projects/cu_00014/data/databases/release214/"
