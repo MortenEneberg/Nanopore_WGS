@@ -5,4 +5,5 @@ threads_Flye: 20
 checkm2db: "/home/projects/cu_00014/data/databases/CheckM2_database/uniref100.KO.1.dmnd"
 
 reference_genome: ".test/data/genomes/GCF_000008865.2_ASM886v2_genomic.fna"
-metadata: "/home/projects/cu_00014/data/sepseq_WGS/metadata/metadata_AMR_WGS_001.csv"
+metadata_folder: "/home/projects/cu_00014/data/sepseq_WGS/metadata/metadata_files/"
+metadata: "data/metadata_combined.csv" 

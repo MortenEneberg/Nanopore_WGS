@@ -42,6 +42,32 @@ def list_directories(folder_path):
     directories = [d for d in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, d))]
     return directories
 
+if not os.path.exists("data/"): 
+	os.makedirs("data/") 
+
+METADATA_FOLDER = config["metadata_folder"]
+METADATA = config["metadata"]
+
+def bind_csv_rows(folder_path, output_file):
+	# List to hold DataFrames
+	dataframes = []
+
+	# Iterate over each file in the folder
+	for filename in os.listdir(folder_path):
+		if filename.endswith('.csv'):
+			file_path = os.path.join(folder_path, filename)
+			# Read the CSV file
+			df = pd.read_csv(file_path)
+			# Append the DataFrame to the list
+			dataframes.append(df)
+
+	# Concatenate all DataFrames
+	combined_df = pd.concat(dataframes, ignore_index=True)
+
+	# Write the combined DataFrame to a new CSV file
+	combined_df.to_csv(output_file, index=False)
+
+bind_csv_rows(METADATA_FOLDER, METADATA)
 
 def process_sample_fastq_file(metadata_path_set, root_folder_path_set, output_dir_set, target_sample_id_set):
 	"""
@@ -146,7 +172,6 @@ def extract_sampleID_column(file_path):
 
 
 READ_FOLDER = config["reads"]
-METADATA = config["metadata"]
 sample_ids = extract_sampleID_column(METADATA)
 minQual = config["minReadsQual"]
 minLength = config["minReadsLength"]
