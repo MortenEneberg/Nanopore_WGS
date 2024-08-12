@@ -181,16 +181,21 @@ minLength = config["minReadsLength"]
 rule all:
 	input:
 		expand("data/20_flye_assembly/{sampleid}/assembly.fasta",sampleid=sample_ids),
-		expand("data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
+		#expand("data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
 		expand("data/qc/10_quast/{sampleid}/report.html",sampleid=sample_ids),
 		expand("data/qc/20_checkm/{sampleid}/quality_report.tsv",sampleid=sample_ids),
-		expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
-		expand("data/AMR/01_abricate/{sampleid}/abricate.txt",sampleid=sample_ids),
+		#expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
+		expand("data/AMR/01_abricate/{sampleid}/abricate_ncbi.txt",sampleid=sample_ids),
+		expand("data/AMR/01_abricate/{sampleid}/abricate_resfinder.txt",sampleid=sample_ids),
+		expand("data/AMR/01_abricate/{sampleid}/abricate_card.txt",sampleid=sample_ids),
 		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids),
 		"data/qc/40_fastani/fastani_report.tsv",
-		expand("data/qc/51_cmseq/{sampleid}/polysnp.tsv", sampleid=sample_ids),
-		expand("data/qc/51_cmseq/{sampleid}/cov.tsv", sampleid=sample_ids),
+		#expand("data/qc/51_cmseq/{sampleid}/polysnp.tsv", sampleid=sample_ids),
+		#expand("data/qc/51_cmseq/{sampleid}/cov.tsv", sampleid=sample_ids),
 		expand("data/qc/11_seqkit/{sampleid}/seqkit.tsv", sampleid=sample_ids),
+		#expand("data/qc/60_mmseqs/{sampleid}/mmseqs.tsv", sampleid=sample_ids),
+		expand("data/qc/71_coverage/{sampleid}/coverage.tsv", sampleid=sample_ids),
+		expand("data/qc/70_gc/{sampleid}/gc.tsv", sampleid=sample_ids),
 
 rule cat_raw_reads:
 	output:
@@ -350,16 +355,22 @@ rule abricate:
 	input:
 		"data/20_flye_assembly/{sampleid}/assembly.fasta"
 	output:
-		"data/AMR/01_abricate/{sampleid}/abricate.txt"
+		resfinder = "data/AMR/01_abricate/{sampleid}/abricate_resfinder.txt",
+		ncbi = "data/AMR/01_abricate/{sampleid}/abricate_ncbi.txt",
+		card = "data/AMR/01_abricate/{sampleid}/abricate_card.txt",
 	threads:
 		5
 	shell:
 		"""
 		size=$(stat -c '%s' {input})
 		if [ $size -gt 0 ]; then
-		abricate {input} > {output}
+		abricate --db resfinder {input} > {output.resfinder}
+		abricate --db ncbi {input} > {output.ncbi}
+		abricate --db card {input} > {output.card}
 		else 
-		touch {output}
+		touch {output.resfinder}
+		touch {output.ncbi}
+		touch {output.card}
 		fi
 		"""
 
@@ -453,6 +464,55 @@ rule datayield:
 		size=$(stat -c '%s' {input.reads})
 		if [ $size -gt 0 ]; then
 		seqkit stats -j {threads} -a -T {input.reads} >> {output.report}
+		else 
+		touch {output.report}
+		fi
+		"""
+
+rule mmseqs2:
+	conda:
+		"_envs/mmseqs2.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
+	params:
+		seqtaxdb = "",
+		outdir = "data/qc/60_mmseqs/{sampleid}/"
+	output:
+		report = "data/qc/60_mmseqs/{sampleid}/mmseqs.tsv"
+	shell:
+		"""
+		mmseqs easy-taxonomy {input.assembly} {params.seqtaxdb} {params.outdir} {params.outdir}
+		"""
+
+rule gc:
+	conda:
+		"_envs/seqkit.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
+	output:
+		report = "data/qc/70_gc/{sampleid}/gc.tsv"
+	shell:
+		"""
+		size=$(stat -c '%s' {input.assembly})
+		if [ $size -gt 0 ]; then
+		seqkit stats {input.assembly} -a -T > {output.report}
+		else 
+		touch {output.report}
+		fi
+		"""
+
+rule coverage:
+	conda:
+		"_envs/minimap2.yaml"
+	input:
+		bam = "data/qc/50_bam/{sampleid}/bamfile.sorted.bam"
+	output:
+		report = "data/qc/71_coverage/{sampleid}/coverage.tsv"
+	shell:
+		"""
+		size=$(stat -c '%s' {input.bam})
+		if [ $size -gt 0 ]; then
+		samtools coverage {input.bam} -o {output.report}
 		else 
 		touch {output.report}
 		fi

@@ -1,6 +1,6 @@
-name: cmseq_env
+name: mmseqs2_env
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - cmseq=1.0.4
+  - mmseqs2=v15.6f452
