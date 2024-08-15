@@ -3,11 +3,11 @@
 #PBS -W group_list=cu_00014 -A cu_00014 ## name of the allocation (who is paying for the compute time)
 
 ### Number of nodes
-#PBS -l nodes=1:fatnode:ppn=40
+#PBS -l nodes=1:thinnode:ppn=40
 ### Memory
-#PBS -l mem=700gb
+#PBS -l mem=180gb
 ### Requesting time - format is <days>:<hours>:<minutes>:<seconds> (here, 12 hours)
-#PBS -l walltime=300:00:00
+#PBS -l walltime=100:00:00
 
 #PBS -M menie@bio.aau.dk  ## send email notifications to umich email listed
 #PBS -m abe                ## when to send email a=abort b=job begin e=job end
