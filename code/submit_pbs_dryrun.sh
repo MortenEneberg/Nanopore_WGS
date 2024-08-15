@@ -26,4 +26,4 @@ WD="/home/projects/cu_00014/data/sepseq_WGS/analysis/all_samples/Nanopore_WGS/"
 cd $WD
 
 #  Put your job commands after this line. Load all required modules before submitting this script.
-snakemake --latency-wait 90 -s Snakefile --configfile config/config_pbs.yaml --cores 40 --use-conda --conda-frontend mamba --keep-going --rerun-incomplete --force --dry-run >> dryrun.txt
+snakemake --latency-wait 90 -s Snakefile --configfile config/config_pbs.yaml --cores 40 --use-conda --conda-frontend mamba --keep-going --rerun-incomplete --force --dry-run > dryrun.txt

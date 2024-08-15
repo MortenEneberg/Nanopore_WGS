@@ -189,13 +189,11 @@ rule all:
 		expand("data/AMR/01_abricate/{sampleid}/abricate_resfinder.txt",sampleid=sample_ids),
 		expand("data/AMR/01_abricate/{sampleid}/abricate_card.txt",sampleid=sample_ids),
 		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids),
-		"data/qc/40_fastani/fastani_report.tsv",
-		#expand("data/qc/51_cmseq/{sampleid}/polysnp.tsv", sampleid=sample_ids),
-		#expand("data/qc/51_cmseq/{sampleid}/cov.tsv", sampleid=sample_ids),
 		expand("data/qc/11_seqkit/{sampleid}/seqkit.tsv", sampleid=sample_ids),
-		#expand("data/qc/60_mmseqs/{sampleid}/mmseqs.tsv", sampleid=sample_ids),
 		expand("data/qc/71_coverage/{sampleid}/coverage.tsv", sampleid=sample_ids),
 		expand("data/qc/70_gc/{sampleid}/gc.tsv", sampleid=sample_ids),
+		expand("data/qc/40_barrnap/{sampleid}/barrnap.gff", sampleid=sample_ids),
+		expand("data/qc/41_trnascan/{sampleid}/trnascan_gff.txt", sampleid=sample_ids),
 
 rule cat_raw_reads:
 	output:
@@ -517,3 +515,46 @@ rule coverage:
 		touch {output.report}
 		fi
 		"""
+
+
+rule barrnap:
+	conda:
+		"_envs/barrnap.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
+	threads:
+		3
+	output:
+		gff = "data/qc/40_barrnap/{sampleid}/barrnap.gff"
+	shell:
+		"""
+		size=$(stat -c '%s' {input.assembly})
+		if [ $size -gt 0 ]; then
+		barrnap {input.assembly} --threads {threads} > {output.gff}
+		else 
+		touch {output.gff}
+		fi
+		"""
+
+
+rule trnascan:
+	conda:
+		"_envs/trnascan.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
+	threads:
+		3
+	output:
+		gff = "data/qc/41_trnascan/{sampleid}/trnascan_gff.txt",
+		stats = "data/qc/41_trnascan/{sampleid}/trnascan_stats.txt"
+	shell:
+		"""
+		size=$(stat -c '%s' {input.assembly})
+		if [ $size -gt 0 ]; then
+		tRNAscan-SE {input.assembly} -B --thread {threads} -o {output.gff} -m {output.stats}
+		else 
+		touch {output.gff}
+		touch {output.stats}
+		fi
+		"""
+	
