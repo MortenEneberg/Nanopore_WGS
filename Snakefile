@@ -194,6 +194,7 @@ rule all:
 		expand("data/qc/70_gc/{sampleid}/gc.tsv", sampleid=sample_ids),
 		expand("data/qc/40_barrnap/{sampleid}/barrnap.gff", sampleid=sample_ids),
 		expand("data/qc/41_trnascan/{sampleid}/trnascan_gff.txt", sampleid=sample_ids),
+		expand("data/qc/60_bakta/{sampleid}/{sampleid}.tsv", sampleid=sample_ids)
 
 rule cat_raw_reads:
 	output:
@@ -557,4 +558,20 @@ rule trnascan:
 		touch {output.stats}
 		fi
 		"""
-	
+
+rule bakta:
+	conda:
+		"_envs/bakta.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
+	params:
+		bakta_db = config["bakta_db"],
+		output_dir = "data/qc/60_bakta/{sampleid}"
+	threads:
+		10
+	output:
+		"data/qc/60_bakta/{sampleid}/{sampleid}.tsv"
+	shell:
+		"""
+		bakta --db {params.bakta_db} --output {params.output_dir} --force --prefix {wildcards.sampleid} --threads {threads} {input.assembly}
+		"""

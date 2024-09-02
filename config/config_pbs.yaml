@@ -1,5 +1,5 @@
 reads: "/home/projects/cu_00014/data/sepseq_WGS/raw_data/" #Path to folder with reads
-minReadsQual: 10
+minReadsQual: 90
 minReadsLength: 2000
 threads_Flye: 20
 checkm2db: "/home/projects/cu_00014/data/databases/CheckM2_database/uniref100.KO.1.dmnd"
@@ -7,3 +7,4 @@ checkm2db: "/home/projects/cu_00014/data/databases/CheckM2_database/uniref100.KO
 reference_genome: ".test/data/genomes/GCF_000008865.2_ASM886v2_genomic.fna"
 metadata_folder: "/home/projects/cu_00014/data/sepseq_WGS/metadata/metadata_files/"
 metadata: "data/metadata_combined.csv" 
+bakta_db: "/home/projects/cu_00014/data/databases/bakta_db/db/"
