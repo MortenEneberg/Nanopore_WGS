@@ -3,9 +3,9 @@
 #PBS -W group_list=cu_00014 -A cu_00014 ## name of the allocation (who is paying for the compute time)
 
 ### Number of nodes
-#PBS -l nodes=1:thinnode:ppn=40
+#PBS -l nodes=1:fatnode:ppn=40
 ### Memory
-#PBS -l mem=180gb
+#PBS -l mem=700gb
 ### Requesting time - format is <days>:<hours>:<minutes>:<seconds> (here, 12 hours)
 #PBS -l walltime=100:00:00
 
