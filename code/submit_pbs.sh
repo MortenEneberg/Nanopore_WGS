@@ -22,7 +22,7 @@ module load tools
 module load snakemake/7.18.2
 module load mamba-org/mamba/0.24.0 
 
-WD="/home/projects/cu_00014/data/sepseq_WGS/analysis/all_samples/Nanopore_WGS/"
+WD="/home/projects/cu_00014/data/sepseq_WGS/analysis/AMR_analysis/Nanopore_WGS/"
 cd $WD
 
 #  Put your job commands after this line. Load all required modules before submitting this script.

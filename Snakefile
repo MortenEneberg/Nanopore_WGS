@@ -181,20 +181,21 @@ minLength = config["minReadsLength"]
 rule all:
 	input:
 		expand("data/20_flye_assembly/{sampleid}/assembly.fasta",sampleid=sample_ids),
-		#expand("data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
-		expand("data/qc/10_quast/{sampleid}/report.html",sampleid=sample_ids),
+		expand("data/qc/01_NanoPlot_raw/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
+		#expand("data/qc/10_quast/{sampleid}/report.html",sampleid=sample_ids),
 		expand("data/qc/20_checkm/{sampleid}/quality_report.tsv",sampleid=sample_ids),
-		#expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
+		expand("data/qc/02_NanoPlot_filtered/{sampleid}/NanoPlot-report.html",sampleid=sample_ids),
 		expand("data/AMR/01_abricate/{sampleid}/abricate_ncbi.txt",sampleid=sample_ids),
 		expand("data/AMR/01_abricate/{sampleid}/abricate_resfinder.txt",sampleid=sample_ids),
 		expand("data/AMR/01_abricate/{sampleid}/abricate_card.txt",sampleid=sample_ids),
 		expand("data/qc/30_gtdbtk/{sampleid}/gtdbtk.bac120.summary.tsv",sampleid=sample_ids),
 		expand("data/qc/11_seqkit/{sampleid}/seqkit.tsv", sampleid=sample_ids),
-		expand("data/qc/71_coverage/{sampleid}/coverage.tsv", sampleid=sample_ids),
-		expand("data/qc/70_gc/{sampleid}/gc.tsv", sampleid=sample_ids),
+		#expand("data/qc/71_coverage/{sampleid}/coverage.tsv", sampleid=sample_ids),
+		#expand("data/qc/70_gc/{sampleid}/gc.tsv", sampleid=sample_ids),
 		expand("data/qc/40_barrnap/{sampleid}/barrnap.gff", sampleid=sample_ids),
 		expand("data/qc/41_trnascan/{sampleid}/trnascan_gff.txt", sampleid=sample_ids),
-		expand("data/qc/60_bakta/{sampleid}/{sampleid}.tsv", sampleid=sample_ids)
+		#expand("data/qc/60_bakta/{sampleid}/{sampleid}.tsv", sampleid=sample_ids),
+		expand("data/qc/70_genomad/{sampleid}/assembly_summary/assembly_plasmid_summary.tsv", sampleid=sample_ids)
 
 rule cat_raw_reads:
 	output:
@@ -337,7 +338,7 @@ rule gtdbtk:
 		in_dir = "data/20_flye_assembly",
 		outdir = "data/qc/30_gtdbtk/"
 	threads:
-		30
+		20
 	shell:
 		"""
 		size=$(stat -c '%s' {input})
@@ -574,4 +575,21 @@ rule bakta:
 	shell:
 		"""
 		bakta --db {params.bakta_db} --output {params.output_dir} --force --prefix {wildcards.sampleid} --threads {threads} {input.assembly}
+		"""
+
+rule genomad:
+	conda:
+		"_envs/genomad.yaml"
+	input:
+		assembly = "data/20_flye_assembly/{sampleid}/assembly.fasta"
+	params:
+		genomad_db = config["genomad_db"],
+		output_dir = "data/qc/70_genomad/{sampleid}"
+	threads:
+		5
+	output:
+		"data/qc/70_genomad/{sampleid}/assembly_summary/assembly_plasmid_summary.tsv"
+	shell:
+		"""
+		genomad end-to-end --cleanup {input.assembly} {params.output_dir} {params.genomad_db}
 		"""
